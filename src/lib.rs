@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet}, hash::Hash,
+    collections::{HashMap, HashSet}, hash::Hash,
 };
 
 use ordered_float::NotNan;
@@ -19,13 +19,13 @@ where
     let map = data.iter().enumerate().fold(
         HashMap::new(),
         |mut map, (i, transaction)| {
-           for &item in transaction {
+            for &item in transaction {
                 map.entry(item)
-                    .and_modify(|(count, indexes): &mut (_, Vec<_>)| {
+                    .and_modify(|(count, indexes): &mut (_, HashSet<_>)| {
                         *count += 1;
-                        indexes.push(i);
+                        indexes.insert(i);
                     })
-                    .or_insert_with(|| (1, vec![i]));
+                    .or_insert_with(|| (1, [i].into_iter().collect()));
             }
 
             map
@@ -66,11 +66,10 @@ where
                     let merged: HashSet<_> =
                         [a.item, b.item].into_iter().collect();
 
-                    let row_indexes: BTreeSet<_> = a
+                    let row_indexes: HashSet<_> = a
                         .row_indexes
-                        .iter()
+                        .intersection(&b.row_indexes)
                         .copied()
-                        .chain(b.row_indexes.iter().copied())
                         .collect();
 
                     KItemSet::new(merged, data, row_indexes)
@@ -106,11 +105,10 @@ where
                         .chain([one_item_set.item])
                         .collect();
 
-                    let row_indexes: BTreeSet<_> = previous_set
+                    let row_indexes: HashSet<_> = previous_set
                         .row_indexes
-                        .iter()
+                        .intersection(&one_item_set.row_indexes)
                         .copied()
-                        .chain(one_item_set.row_indexes.iter().copied())
                         .collect();
 
                     KItemSet::new(merged, data, row_indexes)

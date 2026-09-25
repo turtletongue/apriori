@@ -1,4 +1,4 @@
-use std::{collections::HashSet, hash::Hash};
+use std::{collections::{HashSet}, hash::Hash};
 
 use ordered_float::NotNan;
 
@@ -7,7 +7,7 @@ pub struct OneItemSet<T> {
     pub item: T,
     pub support_count: usize,
     pub support: NotNan<f64>,
-    pub row_indexes: Vec<usize>,
+    pub row_indexes: HashSet<usize>,
 }
 
 impl<T> OneItemSet<T> {
@@ -15,7 +15,7 @@ impl<T> OneItemSet<T> {
         item: T,
         support_count: usize,
         support: NotNan<f64>,
-        row_indexes: Vec<usize>,
+        row_indexes: HashSet<usize>,
     ) -> Self
     where
         T: Clone + Eq + Hash + PartialEq,
@@ -40,7 +40,7 @@ pub struct KItemSet<T> {
     pub items: HashSet<T>,
     pub support_count: usize,
     pub support: NotNan<f64>,
-    pub row_indexes: Vec<usize>,
+    pub row_indexes: HashSet<usize>,
 }
 
 impl<T> PartialEq for KItemSet<T>
@@ -65,12 +65,12 @@ impl<T> KItemSet<T> {
         I: IntoIterator<Item = usize>,
     {
         let mut support_count = 0;
-        let mut found_indexes = Vec::new();
+        let mut found_indexes = HashSet::new();
 
         for index in row_indexes {
             if data[index].is_superset(&items) {
                 support_count += 1;
-                found_indexes.push(index);
+                found_indexes.insert(index);
             }
         }
 
