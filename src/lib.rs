@@ -1,6 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
+    collections::{BTreeSet, HashMap, HashSet}, hash::Hash,
 };
 
 use ordered_float::NotNan;
@@ -67,7 +66,7 @@ where
                     let merged: HashSet<_> =
                         [a.item, b.item].into_iter().collect();
 
-                    let row_indexes: HashSet<_> = a
+                    let row_indexes: BTreeSet<_> = a
                         .row_indexes
                         .iter()
                         .copied()
@@ -107,7 +106,7 @@ where
                         .chain([one_item_set.item])
                         .collect();
 
-                    let row_indexes: HashSet<_> = previous_set
+                    let row_indexes: BTreeSet<_> = previous_set
                         .row_indexes
                         .iter()
                         .copied()
