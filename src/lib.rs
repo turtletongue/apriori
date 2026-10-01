@@ -1,7 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet}, hash::Hash,
-};
+use std::{hash::Hash, iter};
 
+use fxhash::{FxHashMap, FxHashSet};
 use ordered_float::NotNan;
 
 pub use crate::sets::{KItemSet, OneItemSet};
@@ -10,22 +9,24 @@ mod sets;
 
 #[must_use]
 pub fn generate_one_item_sets<'a, T>(
-    data: &[HashSet<&'a T>],
+    data: &[FxHashSet<&'a T>],
     min_support: f64,
 ) -> Vec<OneItemSet<&'a T>>
 where
     T: Eq + Hash + PartialEq + ?Sized,
 {
+    let min_count = (min_support * (data.len() as f64)) as usize;
+
     let map = data.iter().enumerate().fold(
-        HashMap::new(),
+        FxHashMap::default(),
         |mut map, (i, transaction)| {
             for &item in transaction {
                 map.entry(item)
-                    .and_modify(|(count, indexes): &mut (_, HashSet<_>)| {
+                    .and_modify(|(count, indexes): &mut (_, FxHashSet<_>)| {
                         *count += 1;
                         indexes.insert(i);
                     })
-                    .or_insert_with(|| (1, [i].into_iter().collect()));
+                    .or_insert_with(|| (1, iter::once(i).collect()));
             }
 
             map
@@ -33,6 +34,7 @@ where
     );
 
     map.into_iter()
+        .filter(|(_, (count, _))| *count >= min_count)
         .map(|(item, (count, indexes))| {
             let support = NotNan::new((count as f64) / (data.len() as f64))
                 .expect("never NaN");
@@ -48,40 +50,38 @@ where
 
 #[must_use]
 pub fn generate_two_item_sets<'a, T>(
-    data: &[HashSet<&'a T>],
+    data: &[FxHashSet<&'a T>],
     one_item_sets: &[OneItemSet<&'a T>],
     min_support: f64,
 ) -> Vec<KItemSet<&'a T>>
 where
     T: Eq + Hash + PartialEq + ?Sized,
 {
+    let min_count = (min_support * (data.len() as f64)) as usize;
+
     one_item_sets
         .iter()
         .enumerate()
         .flat_map(|(i, a)| {
-            one_item_sets
-                .iter()
-                .skip(i + 1)
-                .map(|b| {
-                    let merged: HashSet<_> =
-                        [a.item, b.item].into_iter().collect();
+            one_item_sets.iter().skip(i + 1).filter_map(|b| {
+                let merged: FxHashSet<_> =
+                    [a.item, b.item].into_iter().collect();
 
-                    let row_indexes: HashSet<_> = a
-                        .row_indexes
-                        .intersection(&b.row_indexes)
-                        .copied()
-                        .collect();
+                let row_indexes: FxHashSet<_> = a
+                    .row_indexes
+                    .intersection(&b.row_indexes)
+                    .copied()
+                    .collect();
 
-                    KItemSet::new(merged, data, row_indexes)
-                })
-                .filter(|set| set.support.into_inner() >= min_support)
+                KItemSet::new(merged, data, row_indexes, min_count)
+            })
         })
         .collect()
 }
 
 #[must_use]
 pub fn generate_next_sets<'a, T>(
-    data: &[HashSet<&'a T>],
+    data: &[FxHashSet<&'a T>],
     previous_sets: &[KItemSet<&'a T>],
     one_item_sets: &[OneItemSet<&'a T>],
     min_support: f64,
@@ -89,6 +89,8 @@ pub fn generate_next_sets<'a, T>(
 where
     T: Eq + Hash + PartialEq + ?Sized,
 {
+    let min_count = (min_support * (data.len() as f64)) as usize;
+
     previous_sets
         .iter()
         .flat_map(|previous_set| {
@@ -97,23 +99,22 @@ where
                 .filter(|one_item_set| {
                     !previous_set.items.contains(one_item_set.item)
                 })
-                .map(|one_item_set| {
-                    let merged: HashSet<_> = previous_set
+                .filter_map(|one_item_set| {
+                    let merged: FxHashSet<_> = previous_set
                         .items
                         .iter()
                         .copied()
                         .chain([one_item_set.item])
                         .collect();
 
-                    let row_indexes: HashSet<_> = previous_set
+                    let row_indexes: FxHashSet<_> = previous_set
                         .row_indexes
                         .intersection(&one_item_set.row_indexes)
                         .copied()
                         .collect();
 
-                    KItemSet::new(merged, data, row_indexes)
+                    KItemSet::new(merged, data, row_indexes, min_count)
                 })
-                .filter(|set| set.support.into_inner() >= min_support)
         })
         .collect()
 }
@@ -122,13 +123,13 @@ where
 mod tests {
     use super::*;
 
-    fn get_data() -> Vec<HashSet<&'static str>> {
+    fn get_data() -> Vec<FxHashSet<&'static str>> {
         vec![
-            HashSet::from(["Bread", "Butter", "Milk"]),
-            HashSet::from(["Bread", "Butter"]),
-            HashSet::from(["Bread", "Milk"]),
-            HashSet::from(["Butter", "Milk"]),
-            HashSet::from(["Bread", "Milk"]),
+            FxHashSet::from_iter(["Bread", "Butter", "Milk"]),
+            FxHashSet::from_iter(["Bread", "Butter"]),
+            FxHashSet::from_iter(["Bread", "Milk"]),
+            FxHashSet::from_iter(["Butter", "Milk"]),
+            FxHashSet::from_iter(["Bread", "Milk"]),
         ]
     }
 

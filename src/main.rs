@@ -1,6 +1,5 @@
 use std::{
     cmp::Ordering,
-    collections::HashSet,
     error::Error,
     fmt::{self, Display},
     fs::File,
@@ -10,6 +9,7 @@ use std::{
 
 use apriori::{self, KItemSet, OneItemSet};
 use clap::{Parser, ValueEnum};
+use fxhash::FxHashSet;
 use ordered_float::NotNan;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -21,9 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let data: Vec<_> = rows
         .iter()
-        .map(|row| {
-            row.split(',').map(str::trim).collect::<HashSet<&str>>()
-        })
+        .map(|row| row.split(',').map(str::trim).collect::<FxHashSet<&str>>())
         .collect();
 
     let start = Instant::now();
@@ -50,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         i += 1;
     }
 
-    let end =  start.elapsed();
+    let end = start.elapsed();
 
     let mut results: Vec<_> = last_k_item_sets
         .into_iter()

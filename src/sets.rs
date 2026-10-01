@@ -1,5 +1,6 @@
-use std::{collections::{HashSet}, hash::Hash};
+use std::hash::Hash;
 
+use fxhash::FxHashSet;
 use ordered_float::NotNan;
 
 #[derive(Clone, Debug)]
@@ -7,7 +8,7 @@ pub struct OneItemSet<T> {
     pub item: T,
     pub support_count: usize,
     pub support: NotNan<f64>,
-    pub row_indexes: HashSet<usize>,
+    pub row_indexes: FxHashSet<usize>,
 }
 
 impl<T> OneItemSet<T> {
@@ -15,7 +16,7 @@ impl<T> OneItemSet<T> {
         item: T,
         support_count: usize,
         support: NotNan<f64>,
-        row_indexes: HashSet<usize>,
+        row_indexes: FxHashSet<usize>,
     ) -> Self
     where
         T: Clone + Eq + Hash + PartialEq,
@@ -37,10 +38,10 @@ impl<T> Eq for OneItemSet<T> where T: Eq + Hash + PartialEq {}
 
 #[derive(Clone, Debug)]
 pub struct KItemSet<T> {
-    pub items: HashSet<T>,
+    pub items: FxHashSet<T>,
     pub support_count: usize,
     pub support: NotNan<f64>,
-    pub row_indexes: HashSet<usize>,
+    pub row_indexes: FxHashSet<usize>,
 }
 
 impl<T> PartialEq for KItemSet<T>
@@ -55,17 +56,21 @@ where
 impl<T> Eq for KItemSet<T> where T: Eq + Hash + PartialEq {}
 
 impl<T> KItemSet<T> {
-    pub(crate) fn new<I>(
-        items: HashSet<T>,
-        data: &[HashSet<T>],
-        row_indexes: I,
-    ) -> Self
+    pub(crate) fn new(
+        items: FxHashSet<T>,
+        data: &[FxHashSet<T>],
+        row_indexes: FxHashSet<usize>,
+        min_count: usize,
+    ) -> Option<Self>
     where
         T: Clone + Eq + Hash + PartialEq,
-        I: IntoIterator<Item = usize>,
     {
+        if row_indexes.len() < min_count {
+            return None;
+        }
+
         let mut support_count = 0;
-        let mut found_indexes = HashSet::new();
+        let mut found_indexes = FxHashSet::default();
 
         for index in row_indexes {
             if data[index].is_superset(&items) {
@@ -74,9 +79,13 @@ impl<T> KItemSet<T> {
             }
         }
 
+        if support_count < min_count {
+            return None;
+        }
+
         let support = NotNan::new((support_count as f64) / (data.len() as f64))
             .expect("never NaN");
 
-        Self { items, support_count, support, row_indexes: found_indexes }
+        Some(Self { items, support_count, support, row_indexes: found_indexes })
     }
 }
