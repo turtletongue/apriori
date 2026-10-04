@@ -1,16 +1,14 @@
 use std::{
     cmp::Ordering,
+    collections::BTreeSet,
     error::Error,
-    fmt::{self, Display},
     fs::File,
     io::{BufRead as _, BufReader},
     time::Instant,
 };
 
-use apriori::{self, KItemSet, OneItemSet};
+use apriori::{self, AnySet};
 use clap::{Parser, ValueEnum};
-use fxhash::FxHashSet;
-use ordered_float::NotNan;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
@@ -21,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let data: Vec<_> = rows
         .iter()
-        .map(|row| row.split(',').map(str::trim).collect::<FxHashSet<&str>>())
+        .map(|row| row.split(',').map(str::trim).collect::<BTreeSet<&str>>())
         .collect();
 
     let start = Instant::now();
@@ -36,7 +34,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         let sets = apriori::generate_next_sets(
             &data,
             &last_k_item_sets[i - 1],
-            &one_item_sets,
             args.support,
         );
 
@@ -51,16 +48,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let end = start.elapsed();
 
     let mut results: Vec<_> = last_k_item_sets
-        .into_iter()
-        .flat_map(|sets| sets.into_iter().map(ResultingSet::KItem))
-        .chain(one_item_sets.into_iter().map(ResultingSet::OneItem))
+        .iter()
+        .flat_map(|sets| sets.iter().cloned().map(AnySet::KItem))
+        .chain(one_item_sets.iter().cloned().map(AnySet::OneItem))
         .collect();
 
     results.sort_by(|a, b| match args.ordering {
         ResultsOrdering::Support => a.support().cmp(&b.support()).reverse(),
         ResultsOrdering::Lexicographic => {
-            if let (ResultingSet::OneItem(a), ResultingSet::OneItem(b)) = (a, b)
-            {
+            if let (AnySet::OneItem(a), AnySet::OneItem(b)) = (a, b) {
                 a.item.cmp(b.item)
             } else {
                 Ordering::Equal
@@ -68,11 +64,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    println!("Frequent item sets:\n");
+
     for result in &results {
         println!("{result}");
     }
 
     println!("\nCount: {}", results.len());
+    println!("Elapsed: {}ms", end.as_millis());
+
+    let start = Instant::now();
+
+    let rules = apriori::generate_association_rules(
+        &one_item_sets,
+        last_k_item_sets,
+        args.confidence,
+    );
+
+    let end = start.elapsed();
+
+    println!("\nAssociation rules:\n");
+
+    for rule in &rules {
+        println!("{rule}");
+    }
+
+    println!("\nCount: {}", rules.len());
     println!("Elapsed: {}ms", end.as_millis());
 
     Ok(())
@@ -92,6 +109,10 @@ struct Args {
     /// Support threshold
     #[arg(short, long)]
     support: f64,
+
+    /// Confidence threshold
+    #[arg(short, long)]
+    confidence: f64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -99,47 +120,4 @@ struct Args {
 enum ResultsOrdering {
     Lexicographic,
     Support,
-}
-
-#[derive(Clone, Debug)]
-enum ResultingSet<T> {
-    OneItem(OneItemSet<T>),
-    KItem(KItemSet<T>),
-}
-
-impl<T> ResultingSet<T> {
-    const fn support(&self) -> NotNan<f64> {
-        match self {
-            Self::OneItem(one_item_set) => one_item_set.support,
-            Self::KItem(k_item_set) => k_item_set.support,
-        }
-    }
-}
-
-impl<T> Display for ResultingSet<T>
-where
-    T: Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{ ")?;
-
-        match self {
-            Self::OneItem(one_item_set) => {
-                write!(f, "{}", one_item_set.item)?;
-            }
-            Self::KItem(k_item_set) => {
-                for (i, item) in k_item_set.items.iter().enumerate() {
-                    write!(f, "{item}")?;
-
-                    if i != k_item_set.items.len() - 1 {
-                        write!(f, ", ")?;
-                    }
-                }
-            }
-        }
-
-        write!(f, " }} support = {:.2}", self.support())?;
-
-        Ok(())
-    }
 }
