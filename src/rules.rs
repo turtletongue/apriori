@@ -10,6 +10,7 @@ pub struct AssociationRule<T> {
     pub antecedent: BTreeSet<T>,
     pub consequent: BTreeSet<T>,
     pub confidence: NotNan<f64>,
+    pub lift: NotNan<f64>,
 }
 
 impl<T> AssociationRule<T> {
@@ -17,8 +18,9 @@ impl<T> AssociationRule<T> {
         antecedent: BTreeSet<T>,
         consequent: BTreeSet<T>,
         confidence: NotNan<f64>,
+        lift: NotNan<f64>,
     ) -> Self {
-        Self { antecedent, consequent, confidence }
+        Self { antecedent, consequent, confidence, lift }
     }
 }
 
@@ -47,7 +49,11 @@ where
             }
         }
 
-        write!(f, " }} confidence = {:.2}", self.confidence)?;
+        write!(
+            f,
+            " }} confidence = {:.2}, lift = {:.2}",
+            self.confidence, self.lift
+        )?;
 
         Ok(())
     }

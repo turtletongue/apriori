@@ -172,6 +172,11 @@ where
                         continue;
                     };
 
+                    let Some(consequent_support) = support_map.get(&consequent)
+                    else {
+                        continue;
+                    };
+
                     let confidence = set.support / antecedent_support;
 
                     if confidence.into_inner() < min_confidence {
@@ -182,6 +187,7 @@ where
                         antecedent,
                         consequent.clone(),
                         confidence,
+                        confidence / consequent_support,
                     ));
 
                     consequent_candidates.insert(consequent);
